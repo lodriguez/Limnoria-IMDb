@@ -1,5 +1,5 @@
 ###
-# Copyright (c) 2012, Dan
+# Copyright (c) 2020, lod
 # All rights reserved.
 #
 #
@@ -25,16 +25,19 @@ IMDb = conf.registerPlugin('IMDb')
 
 conf.registerGroup(IMDb, 'formats')
 
+conf.registerChannelValue(IMDb, 'enableFetcher',
+        registry.Boolean(True, """Enable or disable the IMDB URL fetcher."""))
+
 conf.registerChannelValue(IMDb, 'shortoutputorder',
-        registry.String('title,runtime,contentrating,rating,ratingcount,metascore,url',
+        registry.String('title,year,runtime,contentrating,rating,ratingcount,metascore,url',
             'Order that parts will be output. ; is line separator and , is field separator'))
 
 conf.registerChannelValue(IMDb, 'outputorder',
-        registry.String('title,runtime,contentrating,rating,ratingcount,metascore,url;description,genres,keywords',
+        registry.String('title,year,runtime,contentrating,rating,ratingcount,metascore,url;description,genres,keywords',
             'Order that parts will be output. ; is line separator and , is field separator'))
 
 conf.registerChannelValue(IMDb, 'fulloutputorder',
-        registry.String('title,url;runtime,contentrating,rating,ratingcount,metascore;description;director,creator,actor;genres,keywords',
+        registry.String('title,year,url;runtime,contentrating,rating,ratingcount,metascore;description;director,writer,actor;genres,keywords',
             'Order that parts will be output. ; is line separator and , is field separator'))
 
 conf.registerChannelValue(IMDb.formats, 'url',
@@ -43,11 +46,14 @@ conf.registerChannelValue(IMDb.formats, 'url',
 conf.registerChannelValue(IMDb.formats, 'title',
         registry.String(ircutils.bold('%(title)s'), 'Format for the output of imdb command'))
 
-conf.registerChannelValue(IMDb.formats, 'description',
-        registry.String(ircutils.bold('Description:') + '  %(description)s', 'Format for the output of imdb command'))
+conf.registerChannelValue(IMDb.formats, 'year',
+        registry.String('%(year)s', 'Format for the output of imdb command'))
 
-conf.registerChannelValue(IMDb.formats, 'creator',
-        registry.String(ircutils.bold('Creator:') + '  %(creator)s', 'Format for the output of imdb command'))
+conf.registerChannelValue(IMDb.formats, 'description',
+        registry.String(ircutils.bold('Description:') + ' %(description)s', 'Format for the output of imdb command'))
+
+conf.registerChannelValue(IMDb.formats, 'writer',
+        registry.String(ircutils.bold('Writer:') + ' %(writer)s', 'Format for the output of imdb command'))
 
 conf.registerChannelValue(IMDb.formats, 'director',
         registry.String(ircutils.bold('Director:') + ' %(director)s', 'Format for the output of imdb command'))
@@ -78,5 +84,3 @@ conf.registerChannelValue(IMDb.formats, 'ratingcount',
 
 conf.registerChannelValue(IMDb.formats, 'metascore',
         registry.String(ircutils.bold('Metacritic:') + ' %(metascore)s/100', 'Format for the output of imdb command'))
-
-# vim:set shiftwidth=4 tabstop=4 expandtab:
