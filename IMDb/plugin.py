@@ -120,18 +120,6 @@ class IMDb(callbacks.Plugin):
 
         imdb_jsn = json.loads(imdb_jsn_raw[0])
 
-        # we can call that from outsite now, so we've to check it's actually a apge we can get usefull informatiosn from
-        # maybe that should be an extra function, to make sure we got an imdb url...
-        #allowedTypes = [
-        #    'TVSeries',
-        #    'TVEpisode',
-        #    'Movie',
-        #    'VideoGame'
-        #]
-
-        #if imdb_jsn['@type'] not in allowedTypes:
-        #    return false
-
         movie = imdb_jsn.get('props', {}).get('pageProps', {}).get('aboveTheFoldData', {})
         if not movie:
             return False
@@ -178,27 +166,8 @@ class IMDb(callbacks.Plugin):
         """[--{short,full}] <movie>
         output info from IMDb about a movie"""
 
-        # do a google search for movie on imdb and use first result
-        query = 'site:http://www.imdb.com/title/ %s' % text
-        search_plugin = irc.getCallback('google')
-
-        if False:
-            try:
-                results = search_plugin.decode(search_plugin.search(query, msg.channel, irc.network))
-                # use first result that ends with a / so that we know its link to main movie page
-                irc.error('yes? ')
-                for r in results:
-                    if r.link[-1] == '/':
-                        imdb_url = r.link
-                        break
-            except Exception as e:
-                self.log.debug(f"Search failed: {e}")
-                imdb_url = self.imdbSearch(text)
-        else:
-            imdb_url = self.imdbSearch(text)
-
         try:
-            imdb_url
+            imdb_url = self.imdbSearch(text)
         except NameError:
             irc.error('Couldn\'t find ' + ircutils.bold(text))
             return
