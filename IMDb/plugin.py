@@ -30,14 +30,17 @@ class IMDb(callbacks.Plugin):
     threaded = True
     regexps = ['imdbSnarfer']
 
+    FILTER_MAP = {
+        'movie': 'ft', 'tv': 'tv', 'game': 'vg',
+        'episode': 'ep', 'music': 'mu', 'podcast': 'ps'
+    }
+
     def __init__(self, irc):
         self.__parent = super(IMDb, self)
         self.__parent.__init__(irc)
 
     def _reply(self, irc, channel, info, mode):
-        """
-        Unified reply function.
-        """
+        """Unified reply function."""
         outputorder = self.registryValue(mode, channel)
 
         for line in outputorder.split(';'):
@@ -53,7 +56,6 @@ class IMDb(callbacks.Plugin):
 
     def doPrivmsg(self, irc, msg):
         channel = msg.args[0]
-
         if not self.registryValue('enableFetcher', channel):
             return
 
@@ -75,20 +77,21 @@ class IMDb(callbacks.Plugin):
         root = html.parse(pagefd)
         return root
 
-    def imdbSearch(self,searchString):
+    def imdbSearch(self, query, search_filter=None):
         """searches the given stringh on imdb.com"""
+        params = {'q': query, 's': 'tt'}
+        if search_filter in self.FILTER_MAP:
+            params['ttype'] = self.FILTER_MAP[search_filter]
 
-        searchEncoded = utils.web.urlencode({'q' : searchString})
-        url = 'https://www.imdb.com/find?&s=tt&' + searchEncoded
+        url = f"https://www.imdb.com/find?{utils.web.urlencode(params)}"
 
         root = self.createRoot(url)
 
-        element = root.xpath('.//a[contains(@class, "ipc-lockup-overlay")]')[0]
-        result = "https://www.imdb.com" + element.attrib["href"]
-
-        result = result.split("?")[0]
-
-        return result
+        try:
+            href = root.xpath('.//a[contains(@class, "ipc-lockup-overlay")]/@href')[0]
+            return f"https://www.imdb.com{href}".split('?')[0]
+        except (IndexError, AttributeError):
+            return None
 
     def imdbParse(self, url):
         """ parses given imdb site and creates a dict with usefull informations """
@@ -147,23 +150,28 @@ class IMDb(callbacks.Plugin):
         """[--{short,full}] <movie>
         output info from IMDb about a movie"""
         mode = 'outputorder'
+        search_filter = None
 
         for (opt, _) in opts:
             if opt == 'short': mode = 'shortoutputorder'
             elif opt == 'full': mode = 'fulloutputorder'
+            elif opt in self.FILTER_MAP: search_filter = opt
 
         try:
-            imdb_url = self.imdbSearch(text)
+            imdb_url = self.imdbSearch(text, search_filter)
         except NameError:
             irc.error('Couldn\'t find ' + ircutils.bold(text))
             return
-q
+
         info = self.imdbParse(imdb_url)
         if info:
             self._reply(irc, msg.args[0], info, mode)
         else:
-            irc.error("Error parsing IMDb data.")
-
-    imdb = wrap(imdb, [getopts({'short':'','full':''}), 'text'])
+            irc.error("Error parsing IMDb data."
+                      )
+    imdb = wrap(imdb, [getopts({
+        'short':'', 'full':'', 'tv':'', 'movie':'', 
+        'game':'', 'episode':'', 'music':'', 'podcast':''
+    }), 'text'])
 
 Class = IMDb
