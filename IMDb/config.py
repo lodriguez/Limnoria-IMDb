@@ -1,5 +1,5 @@
 ###
-# Copyright (c) 2020, lod
+# Copyright (c) 2026, lod
 # All rights reserved.
 #
 #
@@ -29,19 +29,19 @@ conf.registerChannelValue(IMDb, 'enableFetcher',
         registry.Boolean(True, """Enable or disable the IMDB URL fetcher."""))
 
 conf.registerChannelValue(IMDb, 'shortoutputorder',
-        registry.String('title,year,runtime,contentrating,rating,ratingcount,metascore,url',
+        registry.String('title,type,year,runtime,contentrating,rating,ratingcount,metascore,url',
             'Order that parts will be output. ; is line separator and , is field separator'))
 
 conf.registerChannelValue(IMDb, 'outputorder',
-        registry.String('title,year,runtime,contentrating,rating,ratingcount,metascore,url;description,genres,keywords',
+        registry.String('title,type,year,runtime,contentrating,rating,ratingcount,metascore,url;description,genres,keywords',
             'Order that parts will be output. ; is line separator and , is field separator'))
 
 conf.registerChannelValue(IMDb, 'fulloutputorder',
-        registry.String('title,year,url;runtime,contentrating,rating,ratingcount,metascore;description;director,writer,actor;genres,keywords',
+        registry.String('title,type,year,url;runtime,contentrating,rating,ratingcount,metascore;description;director,writer,actor;genres,keywords',
             'Order that parts will be output. ; is line separator and , is field separator'))
 
 conf.registerChannelValue(IMDb, 'snarfoutputorder',
-        registry.String('title,year,runtime,rating,ratingcount,genres,actor,description',
+        registry.String('title,type,year,runtime,rating,ratingcount,genres,actor,description',
             'Order that parts will be output. ; is line separator and , is field separator'))
 
 conf.registerChannelValue(IMDb.formats, 'url',
@@ -52,6 +52,9 @@ conf.registerChannelValue(IMDb.formats, 'title',
 
 conf.registerChannelValue(IMDb.formats, 'year',
         registry.String('%(year)s', 'Format for the output of imdb command'))
+
+conf.registerChannelValue(IMDb.formats, 'type',
+        registry.String('(%(type)s)', 'Format for the output of imdb command'))
 
 conf.registerChannelValue(IMDb.formats, 'description',
         registry.String(ircutils.bold('Description:') + ' %(description)s', 'Format for the output of imdb command'))
@@ -88,3 +91,4 @@ conf.registerChannelValue(IMDb.formats, 'ratingcount',
 
 conf.registerChannelValue(IMDb.formats, 'metascore',
         registry.String(ircutils.bold('Metacritic:') + ' %(metascore)s/100', 'Format for the output of imdb command'))
+

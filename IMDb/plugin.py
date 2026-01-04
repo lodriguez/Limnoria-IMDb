@@ -1,32 +1,21 @@
 ###
-# Copyright (c) 2020, lod
+# Copyright (c) 2026, lod
 # All rights reserved.
 #
 #
 ###
+
+import re
+import json
+from lxml import html
+
 import supybot.utils as utils
 from supybot.commands import *
 import supybot.plugins as plugins
 import supybot.ircutils as ircutils
 import supybot.callbacks as callbacks
 
-import re
-import sys
-import json
-import unicodedata
-import datetime
-from lxml import html
-
-if sys.version_info[0] >= 3:
-    def u(s):
-        return s
-else:
-    def u(s):
-        return unicode(s, "unicode_escape")
-
 class IMDb(callbacks.Plugin):
-    """Add the help for "@plugin help IMDb" here
-    This should describe *how* to use this plugin."""
     threaded = True
     regexps = ['imdbSnarfer']
 
@@ -35,9 +24,14 @@ class IMDb(callbacks.Plugin):
         'episode': 'ep', 'music': 'mu', 'podcast': 'ps'
     }
 
-    def __init__(self, irc):
-        self.__parent = super(IMDb, self)
-        self.__parent.__init__(irc)
+    def _get_root(self, url):
+        headers = dict(utils.web.defaultHeaders)
+        headers.update({'Accept-Language': 'en-US, en;q=0.5', 'Referer': url})
+        try:
+            return html.parse(utils.web.getUrlFd(url, headers=headers))
+        except Exception as e:
+            self.log.error(f"IMDb fetch error: {e}")
+            return None
 
     def _reply(self, irc, channel, info, mode):
         """Unified reply function."""
@@ -54,6 +48,78 @@ class IMDb(callbacks.Plugin):
             if out:
                 irc.reply(' '.join(out), prefixNick=False)
 
+    def imdbSearch(self, query, search_filter=None):
+        """searches the given stringh on imdb.com/find """
+        params = {'q': query, 's': 'tt'}
+        if search_filter in self.FILTER_MAP:
+            params['ttype'] = self.FILTER_MAP[search_filter]
+
+        url = f"https://www.imdb.com/find?{utils.web.urlencode(params)}"
+
+        root = self._get_root(url)
+
+        try:
+            href = root.xpath('.//a[contains(@class, "ipc-lockup-overlay")]/@href')[0]
+            return f"https://www.imdb.com{href}".split('?')[0]
+        except (IndexError, AttributeError):
+            return None
+
+    def imdbParse(self, url):
+        """ parses given imdb site and creates a dict with usefull informations """
+        root = self._get_root(url)
+        info = {}
+
+        imdb_json = root.xpath('//script[@id="__NEXT_DATA__"]/text()')
+        if not imdb_json:
+            return False
+
+        try:
+            data = json.loads(imdb_json[0])
+            entry = data['props']['pageProps']['aboveTheFoldData']
+        except (json.JSONDecodeError, KeyError):
+            return None
+
+        def sg(obj, path):
+            """Safe-get helper for nested dicts."""
+            for key in path:
+                obj = obj.get(key) if isinstance(obj, dict) else None
+            return obj
+
+        info['url'] = url
+        info['title'] = sg(entry, ['titleText', 'text'])
+        info['type'] = sg(entry, ['titleType', 'text'])
+        info['year'] = sg(entry, ['releaseYear', 'year'])
+        info['description'] = sg(entry, ['plot', 'plotText', 'plainText'])
+        info['rating'] = sg(entry, ['ratingsSummary', 'aggregateRating'])
+        info['ratingCount'] = sg(entry, ['ratingsSummary', 'voteCount'])
+        info['contentRating'] = sg(entry, ['certificate', 'rating'])
+        info['metascore'] = sg(entry, ['metacritic', 'metascore', 'score'])
+
+        genres = sg(entry, ['genres', 'genres'])
+        if genres:
+            info['genres'] = ", ".join([g['text'] for g in genres if g.get('text')])
+
+        keywords = sg(entry, ['keywords', 'edges'])
+        if keywords:
+            info['keywords'] = ", ".join([sg(k, ['node', 'text']) for k in keywords if sg(k, ['node', 'text'])])
+
+        seconds = sg(entry, ['runtime', 'seconds'])
+        if seconds:
+            h, m = divmod(seconds, 3600)
+            info['runtime'] = f"{h}h {m//60}m" if h else f"{m//60}m"
+
+        for group in entry.get('principalCreditsV2', []):
+            label = sg(group, ['grouping', 'text']).lower()
+            names = [c.get('name', {}).get('nameText', {}).get('text') for c in group.get('credits', [])]
+            names = [c['name']['nameText']['text'] for c in group.get('credits', []) if sg(c, ['name', 'nameText', 'text'])]
+            names = ", ".join(filter(None, names))
+
+            if 'director' in label: info['director'] = names
+            elif 'writer' in label: info['writer'] = names
+            elif 'star' in label or 'actor' in label: info['actor'] = names
+
+        return info
+
     def doPrivmsg(self, irc, msg):
         channel = msg.args[0]
         if not self.registryValue('enableFetcher', channel):
@@ -65,90 +131,9 @@ class IMDb(callbacks.Plugin):
             if info:
                 self._reply(irc, channel, info, 'snarfoutputorder')
 
-    def createRoot(self, url):
-        """opens the given url and creates the lxml.html root element"""
-
-        ref = 'http://%s/%s' % (dynamic.irc.server, dynamic.irc.nick)
-        headers = dict(utils.web.defaultHeaders)
-        headers['Accept-Language'] = 'en-US; q=1.0, en; q=0.5'
-        headers['Referer'] = ref
-
-        pagefd = utils.web.getUrlFd(url,headers=headers)
-        root = html.parse(pagefd)
-        return root
-
-    def imdbSearch(self, query, search_filter=None):
-        """searches the given stringh on imdb.com"""
-        params = {'q': query, 's': 'tt'}
-        if search_filter in self.FILTER_MAP:
-            params['ttype'] = self.FILTER_MAP[search_filter]
-
-        url = f"https://www.imdb.com/find?{utils.web.urlencode(params)}"
-
-        root = self.createRoot(url)
-
-        try:
-            href = root.xpath('.//a[contains(@class, "ipc-lockup-overlay")]/@href')[0]
-            return f"https://www.imdb.com{href}".split('?')[0]
-        except (IndexError, AttributeError):
-            return None
-
-    def imdbParse(self, url):
-        """ parses given imdb site and creates a dict with usefull informations """
-        root = self.createRoot(url)
-        info = {}
-
-        imdb_jsn_raw = root.xpath('//script[@id="__NEXT_DATA__"]/text()')
-        if not imdb_jsn_raw:
-            return False
-
-        imdb_jsn = json.loads(imdb_jsn_raw[0])
-
-        movie = imdb_jsn.get('props', {}).get('pageProps', {}).get('aboveTheFoldData', {})
-        if not movie:
-            return False
-
-        info['url'] = url
-        info['title'] = movie.get('titleText', {}).get('text') 
-        info['@type'] = movie.get('titleType', {}).get('text')
-        info['contentRating'] = (movie.get('certificate') or {}).get('rating')
-        info['metascore'] = (movie.get('metacritic') or {}).get('metascore', {}).get('score')
-        info['rating'] = movie.get('ratingsSummary', {}).get('aggregateRating')
-        info['ratingCount'] = movie.get('ratingsSummary', {}).get('voteCount')
-        info['description'] = movie.get('plot', {}).get('plotText', {}).get('plainText')
-        info['genres'] = ", ".join([g.get('text') for g in movie.get('genres', {}).get('genres', [])])
-        info['keywords'] = ", ".join([k.get('node', {}).get('text') for k in movie.get('keywords', {}).get('edges', [])])
-        info['year'] = movie.get('releaseYear', {}).get('year')
-
-        duration = movie.get('runtime', {}) or {}
-        duration = duration.get('seconds')
-        if duration:
-            hours =  duration // 3600
-            minutes = (duration % 3600) // 60
-            if hours > 0:
-                info['runtime'] = f"{hours}h {minutes}m"
-            else:
-                info['runtime'] = f"{minutes}m"
-
-        credits = movie.get('principalCreditsV2', [])
-        for group in credits:
-            label = group.get('grouping', {}).get('text', '').lower()
-            names = [c.get('name', {}).get('nameText', {}).get('text') for c in group.get('credits', [])]
-
-            names = ", ".join(filter(None, names))
-
-            if 'director' in label:
-                info['director'] = names
-            elif 'writer' in label:
-                info['writer'] = names
-            elif 'star' in label:
-                info['actor'] = names
-
-        return info
-
     def imdb(self, irc, msg, args, opts, text):
-        """[--{short,full}] <movie>
-        output info from IMDb about a movie"""
+        """[--short|--full] [--tv|--movie|--game|--episode|--music|--podcast] <title>
+        output info from IMDb about a entry"""
         mode = 'outputorder'
         search_filter = None
 
@@ -157,21 +142,22 @@ class IMDb(callbacks.Plugin):
             elif opt == 'full': mode = 'fulloutputorder'
             elif opt in self.FILTER_MAP: search_filter = opt
 
-        try:
-            imdb_url = self.imdbSearch(text, search_filter)
-        except NameError:
-            irc.error('Couldn\'t find ' + ircutils.bold(text))
+        imdb_url = self.imdbSearch(text, search_filter)
+        if not imdb_url::
+            irc.error(f"No results found for {text}")
             return
 
         info = self.imdbParse(imdb_url)
         if info:
             self._reply(irc, msg.args[0], info, mode)
         else:
-            irc.error("Error parsing IMDb data."
-                      )
+            irc.error("Error parsing IMDb data.")
+
     imdb = wrap(imdb, [getopts({
         'short':'', 'full':'', 'tv':'', 'movie':'', 
         'game':'', 'episode':'', 'music':'', 'podcast':''
     }), 'text'])
 
 Class = IMDb
+
+# vim:set shiftwidth=4 softtabstop=4 expandtab:
