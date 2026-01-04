@@ -34,40 +34,35 @@ class IMDb(callbacks.Plugin):
         self.__parent = super(IMDb, self)
         self.__parent.__init__(irc)
 
+    def _reply(self, irc, channel, info, mode):
+        """
+        Unified reply function. 
+        """
+        outputorder = self.registryValue(mode, channel)
+
+        for line in outputorder.split(';'):
+            out = []
+            for field in line.split(','):
+                if info.get(field):
+                    try:
+                        out.append(self.registryValue(f'formats.{field}', channel) % info)
+                    except (KeyError, ValueError):
+                        continue
+            if out:
+                irc.reply(' '.join(out), prefixNick=False)
+
+        
     def doPrivmsg(self, irc, msg):
         channel = msg.args[0]
-        text = msg.args[1]
-
-        if re.search(r'imdb\.com/(?:[a-z]{2}/)?title/', text.lower()):
-            match = re.search(r'https?://(?:www\.)?imdb\.com/(?:[a-z]{2}/)?title/(tt\d+)/?', text)
-            #irc.reply(match)
-            if match:
-                url = match.group(0)
-            else:
-                # Check for URL missing the http/https part
-                match = re.search(r'((?:www\.)?imdb\.com/(?:[a-z]{2}/)?title/(tt\d+)/?)', text)
-                if match:
-                    url = 'https://' + match.group(0)
-                else:
-                    self.log.info('IMDB plugins doPrivmsg: URL <%s> does not match',
-                              url)
-                    return
-
-            imdb = self.imdbParse(url)
-
-            imdb_string = (
-                    f"{imdb.get('title', 'Unknown Title')} "
-                    f"({imdb.get('year', 'n/a')}) · "
-                    f"runtime: {imdb.get('runtime', 'n/a')} · "
-                    f"IMDb: {imdb.get('rating', 'n/a')}/10 "
-                    f"({imdb.get('ratingCount', 'n/a')}) · "
-                    f"{imdb.get('genres', 'N/A')} · "
-                    f"{imdb.get('actor', 'N/A')} · "
-                    f"{imdb.get('description', 'No description available.')}"
-            )
-
-            irc.reply(imdb_string, prefixNick=False)
+        # Only fetch if enableFetcher is True and the bot wasn't directly addressed
+        if not self.registryValue('enableFetcher', channel) or callbacks.addressed(irc.nick, msg):
             return
+        
+        match = re.search(r'(?:www\.)?imdb\.com/(?:[a-z]{2}/)?title/(tt\d+)/?', msg.args[1], re.I)
+        if match:
+            info = self.imdbParse(f"https://www.imdb.com/title/{match.group(1)}/")
+            if info:
+                self._reply(irc, channel, info, 'snarfoutputorder')
 
     def createRoot(self, url):
         """opens the given url and creates the lxml.html root element"""
@@ -165,7 +160,12 @@ class IMDb(callbacks.Plugin):
     def imdb(self, irc, msg, args, opts, text):
         """[--{short,full}] <movie>
         output info from IMDb about a movie"""
-
+        mode = 'outputorder'
+        
+        for (opt, _) in opts:
+            if opt == 'short': mode = 'shortoutputorder'
+            elif opt == 'full': mode = 'fulloutputorder'
+        
         try:
             imdb_url = self.imdbSearch(text)
         except NameError:
@@ -173,31 +173,10 @@ class IMDb(callbacks.Plugin):
             return
 
         info = self.imdbParse(imdb_url)
-
-        def reply(s): irc.reply(s, prefixNick=False)
-        # getting optional parameter
-        opts = dict(opts)
-        # change orderoutput by optional parameter
-        if 'short' in opts:
-            outputorder = self.registryValue('shortoutputorder', msg.args[0])
-        elif 'full' in opts:
-            outputorder = self.registryValue('fulloutputorder', msg.args[0])
+        if info:
+            self._reply(irc, msg.args[0], info, mode)
         else:
-            outputorder = self.registryValue('outputorder', msg.args[0])
-
-        # output based on order in config. lines are separated by ; and fields on a line separated by ,
-        # each field has a corresponding format config
-        for line in outputorder.split(';'):
-            out = []
-            for field in line.split(','):
-                value = info.get(field)
-                if value and value != 'n/a':
-                    try:
-                        out.append(self.registryValue('formats.'+field, msg.args[0]) % info)
-                    except KeyError:
-                        continue
-            if out:
-                reply(' '.join(out))
+            irc.error("Error parsing IMDb data.")
 
     imdb = wrap(imdb, [getopts({'short':'','full':''}), 'text'])
 

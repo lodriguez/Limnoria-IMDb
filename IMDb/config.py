@@ -40,6 +40,10 @@ conf.registerChannelValue(IMDb, 'fulloutputorder',
         registry.String('title,year,url;runtime,contentrating,rating,ratingcount,metascore;description;director,writer,actor;genres,keywords',
             'Order that parts will be output. ; is line separator and , is field separator'))
 
+conf.registerChannelValue(IMDb, 'snarfoutputorder',
+        registry.String('title,year,runtime,rating,ratingcount,genres,actor,description',
+            'Order that parts will be output. ; is line separator and , is field separator'))
+
 conf.registerChannelValue(IMDb.formats, 'url',
         registry.String('%(url)s', 'Format for the output of imdb command'))
 
