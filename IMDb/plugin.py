@@ -36,7 +36,7 @@ class IMDb(callbacks.Plugin):
 
     def _reply(self, irc, channel, info, mode):
         """
-        Unified reply function. 
+        Unified reply function.
         """
         outputorder = self.registryValue(mode, channel)
 
@@ -51,13 +51,12 @@ class IMDb(callbacks.Plugin):
             if out:
                 irc.reply(' '.join(out), prefixNick=False)
 
-        
     def doPrivmsg(self, irc, msg):
         channel = msg.args[0]
-        # Only fetch if enableFetcher is True and the bot wasn't directly addressed
-        if not self.registryValue('enableFetcher', channel) or callbacks.addressed(irc.nick, msg):
+
+        if not self.registryValue('enableFetcher', channel):
             return
-        
+
         match = re.search(r'(?:www\.)?imdb\.com/(?:[a-z]{2}/)?title/(tt\d+)/?', msg.args[1], re.I)
         if match:
             info = self.imdbParse(f"https://www.imdb.com/title/{match.group(1)}/")
@@ -88,19 +87,6 @@ class IMDb(callbacks.Plugin):
         result = "https://www.imdb.com" + element.attrib["href"]
 
         result = result.split("?")[0]
-
-        return result
-
-    def imdbPerson(self, persons):
-        """gives a string of persons from imdb ap;i json list or dict"""
-        result = ''
-        try:
-            if isinstance(persons,(list,)):
-                result = ', '.join([x['name'] for x in persons if x['@type'] == 'Person'])
-            else:
-                result = persons['name'] if persons['@type'] == 'Person' else False
-        except:
-            return False
 
         return result
 
@@ -161,17 +147,17 @@ class IMDb(callbacks.Plugin):
         """[--{short,full}] <movie>
         output info from IMDb about a movie"""
         mode = 'outputorder'
-        
+
         for (opt, _) in opts:
             if opt == 'short': mode = 'shortoutputorder'
             elif opt == 'full': mode = 'fulloutputorder'
-        
+
         try:
             imdb_url = self.imdbSearch(text)
         except NameError:
             irc.error('Couldn\'t find ' + ircutils.bold(text))
             return
-
+q
         info = self.imdbParse(imdb_url)
         if info:
             self._reply(irc, msg.args[0], info, mode)
